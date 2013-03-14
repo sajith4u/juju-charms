@@ -1,0 +1,3 @@
+#!/bin/sh
+
+relation-set port=`config-get app_port` hostname=`unit-get private-address`

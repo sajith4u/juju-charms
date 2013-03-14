@@ -1,0 +1,103 @@
+#!/bin/bash
+set -eu # -x for verbose
+umask 002
+
+############################################################################################################
+# Set variables
+############################################################################################################
+install_root=`config-get install_root`
+app_name=`config-get app_name`
+app_dir="$install_root/$app_name"
+app_user=`config-get app_user`
+app_artifact=`config-get app_artifact`
+app_artifact_url=`config-get app_artifact_url`
+app_port=`config-get app_port`
+app_instances=`config-get app_instances`
+vertx_version=`config-get vertx_version`
+
+############################################################################################################
+# Install Vert.x
+############################################################################################################
+
+juju-log "Installing Vert.x ${vertx_version}..."
+apt-get -y install -qq openjdk-7-jdk
+wget http://vertx.io/downloads/vert.x-${vertx_version}.tar.gz -o /tmp/wget.log
+tar -C /opt -zxf vert.x-${vertx_version}.tar.gz
+ln -s /opt/vert.x-${vertx_version}/bin/vertx /usr/local/bin/vertx
+# reconfigure logging to use the OS standard location
+mv /opt/vert.x-${vertx_version}/conf/logging.properties /opt/vert.x-${vertx_version}/conf/logging.properties.original
+cat > /opt/vert.x-${vertx_version}/conf/logging.properties <<EOS
+handlers=java.util.logging.FileHandler
+java.util.logging.FileHandler.level=INFO
+java.util.logging.FileHandler.formatter=org.vertx.java.core.logging.impl.VertxLoggerFormatter
+java.util.logging.FileHandler.pattern=/var/log/${app_name}.log
+
+.level=INFO
+org.vertx.level=INFO
+com.hazelcast.level=SEVERE
+EOS
+
+############################################################################################################
+# Install The App
+############################################################################################################
+
+juju-log "Installing ${app_name}..."
+wget ${app_artifact_url}/${app_artifact} -o /tmp/wget.log || true
+mkdir -p ${app_dir}/mods
+apt-get -y install -qq unzip
+unzip -d ${app_dir}/mods ${app_artifact} || true
+
+cat > ${app_dir}/${app_name}.conf <<EOS
+{
+  "name": "@@APP_NAME@@",
+  "listen_port": @@APP_PORT@@,
+  "redis": "@@REDIS_HOST@@:@@REDIS_PORT@@"
+}
+EOS
+
+cat > ${app_dir}/${app_name}.groovy <<EOS
+vertx.createHttpServer().requestHandler { req ->
+  req.response.end "<html><body><h1>Hello from vert.x!</h1></body></html>"
+}.listen(container.config.listen_port, "0.0.0.0")
+EOS
+
+############################################################################################################
+# Create upstart config
+############################################################################################################
+
+cat > /etc/init/${app_name}.conf <<EOS
+description "${app_name} Vert.x server"
+ 
+start on (net-device-up
+          and local-filesystems
+          and runlevel [2345])
+stop on runlevel [!2345]
+ 
+expect fork
+respawn
+ 
+script
+  cd ${app_dir}
+  exec /usr/local/bin/vertx run ${app_name}.groovy -conf ${app_name}.conf -instances ${app_instances} >> /var/log/vertx.log 2>&1 &
+end script
+EOS
+
+############################################################################################################
+# Configure the App
+############################################################################################################
+
+juju-log "Configuring ${app_name}..."
+
+config_file_path=${app_dir}/${app_name}.conf
+if [ -f $config_file_path ]; then
+  sed -i "s/@@APP_NAME@@/${app_name}/" $config_file_path
+  sed -i "s/@@APP_PORT@@/${app_port}/" $config_file_path
+fi
+
+############################################################################################################
+# Open the listener port when the service is exposed
+############################################################################################################
+
+# Disabled since we expose the app with a proxy
+# open-port ${app_port}/TCP
+

@@ -1,0 +1,12 @@
+name: vertx-app
+summary: "Deploy a Vert.x application"
+description: "Deploy a user-defined Vert.x application"
+maintainer: Paulo Lopes <pmlopes@gmail.com>
+requires:
+  mongodb:
+    interface: mongodb
+  redis:
+    interface: redis
+provides:
+  website:
+    interface: http
