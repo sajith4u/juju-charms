@@ -10,7 +10,7 @@ app_name=`config-get app_name`
 app_dir="$install_root/$app_name"
 app_user=`config-get app_user`
 app_artifact=`config-get app_artifact`
-app_artifact_url=`config-get app_artifact_url`
+repository_url=`config-get repository_url`
 app_port=`config-get app_port`
 app_instances=`config-get app_instances`
 vertx_version=`config-get vertx_version`
@@ -42,24 +42,9 @@ EOS
 ############################################################################################################
 
 juju-log "Installing ${app_name}..."
-wget ${app_artifact_url}/${app_artifact} -o /tmp/wget.log || true
 mkdir -p ${app_dir}/mods
-apt-get -y install -qq unzip
-unzip -d ${app_dir}/mods ${app_artifact} || true
-
-cat > ${app_dir}/${app_name}.conf <<EOS
-{
-  "name": "@@APP_NAME@@",
-  "listen_port": @@APP_PORT@@,
-  "redis": "@@REDIS_HOST@@:@@REDIS_PORT@@"
-}
-EOS
-
-cat > ${app_dir}/${app_name}.groovy <<EOS
-vertx.createHttpServer().requestHandler { req ->
-  req.response.end "<html><body><h1>Hello from vert.x!</h1></body></html>"
-}.listen(container.config.listen_port, "0.0.0.0")
-EOS
+cd ${app_dir}
+/usr/local/bin/vertx install ${app_name} -repo ${repository_url}
 
 ############################################################################################################
 # Create upstart config
@@ -78,7 +63,7 @@ respawn
  
 script
   cd ${app_dir}
-  exec /usr/local/bin/vertx run ${app_name}.groovy -conf ${app_name}.conf -instances ${app_instances} >> /var/log/vertx.log 2>&1 &
+  exec /usr/local/bin/vertx runmod ${app_name} -conf ${app_name}.conf -instances ${app_instances} >> /var/log/vertx.log 2>&1 &
 end script
 EOS
 
@@ -90,8 +75,8 @@ juju-log "Configuring ${app_name}..."
 
 config_file_path=${app_dir}/${app_name}.conf
 if [ -f $config_file_path ]; then
-  sed -i "s/@@APP_NAME@@/${app_name}/" $config_file_path
-  sed -i "s/@@APP_PORT@@/${app_port}/" $config_file_path
+  sed -i 's/"app_name"[ ]*:[ ]*".*"/"app_name": "${app_name}"/' $config_file_path
+  sed -i 's/"app_port"[ ]*:[ ]*[0-9][0-9]*/"app_port": ${app_port}/' $config_file_path
 fi
 
 ############################################################################################################

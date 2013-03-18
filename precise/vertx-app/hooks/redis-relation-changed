@@ -23,8 +23,8 @@ juju-log "configuring ${app_name} to work with the redis service"
 
 config_file_path=${app_dir}/${app_name}.conf
 if [ -f $config_file_path ]; then
-  sed -i "s/@@REDIS_HOST@@/${host}/" $config_file_path
-  sed -i "s/@@REDIS_PORT@@/${port}/" $config_file_path
+  sed -i 's/"redis_host"[ ]*:[ ]*".*"/"redis_host": "${redis_host}"/' $config_file_path
+  sed -i 's/"redis_port"[ ]*:[ ]*[0-9][0-9]*/"redis_port": ${redis_port}/' $config_file_path
 fi
 
 ############################################################################################################

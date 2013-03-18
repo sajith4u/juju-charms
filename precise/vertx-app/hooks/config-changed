@@ -17,8 +17,8 @@ juju-log "Reconfiguring app by installing hook again."
 
 config_file_path=${app_dir}/${app_name}.conf
 if [ -f $config_file_path ]; then
-  sed -i "s/@@APP_NAME@@/${app_name}/" $config_file_path
-  sed -i "s/@@APP_PORT@@/${app_port}/" $config_file_path
+  sed -i 's/"app_name"[ ]*:[ ]*".*"/"app_name": "${app_name}"/' $config_file_path
+  sed -i 's/"app_port"[ ]*:[ ]*[0-9][0-9]*/"app_port": ${app_port}/' $config_file_path
 fi
 
 ############################################################################################################
